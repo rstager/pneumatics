@@ -13,9 +13,10 @@
 #define THROTTLE_ACC     (8000000)
 #define PISTON_POS       A0
 #define P_PID_LIMIT      (200)
-#define DB               (10)
+#define DB               (2)
 #define ARRAY_SIZE       (1)
 #define LOOP_DELAY       (1)
+#define ERR_MAX          800
 
 AccelStepper stepper_left(AccelStepper::DRIVER, MOTOR_L_PIN_PUL, MOTOR_L_PIN_DIR);
 Timer monitor_timer;
@@ -43,12 +44,15 @@ void loop() {
   int i = 0;
   float desired_pos = 10;
   float err_pos = 0;
+  float prev_err_pos = 0;
   float prev_pos[2] = {0};
   long cmd_pos = 0;
-  float p_gain = 0.05*LOOP_DELAY;
-  float i_gain = 0.0001*LOOP_DELAY;
+  float p_gain = 0.09*LOOP_DELAY;
+  float i_gain = 0.0004*LOOP_DELAY;
+  float d_gain = 0.2*LOOP_DELAY;
   float i_pid = 0;
   float p_pid = 0;
+  float d_pid = 0;
   float data0[ARRAY_SIZE];
   float data1[ARRAY_SIZE];
   float filter_pos[3] = {0};
@@ -64,6 +68,7 @@ void loop() {
   float alpha = 0.7;
   int j = 0;
   bool first_flag = false;
+  float ke_gain = 1;
 
   while (true) {
     current_pos = (float)(analogRead(PISTON_POS) - zero_pos);     // read the input pin
@@ -74,8 +79,14 @@ void loop() {
     filter_pos[2] = filter_pos[1];
     filter_pos[1] = filter_pos[0];
     //Serial.println(current_pos);             // debug value
+    prev_err_pos = err_pos;
     err_pos = -(desired_pos - (float)filter_pos[0]) ;
-    data0[i] = (float)current_pos;
+//    ke_gain = 1 + (exp(err_pos/ERR_MAX) + exp(-err_pos/ERR_MAX))/2;
+//    if (ke_gain > 3) {
+//      ke_gain = 3;
+//    }
+    err_pos *= ke_gain;
+
 //    if (desired_pos == 50 && abs(err_pos) < 5) {
 //      pos_reached = true;
 //    }
@@ -113,23 +124,29 @@ void loop() {
 
     i_pid += i_gain * err_pos;
     p_pid = p_gain * err_pos;
-    if (p_pid > P_PID_LIMIT) {
-      p_pid = P_PID_LIMIT;
+    d_pid = d_gain * (err_pos - prev_err_pos);
+    if (i_pid > P_PID_LIMIT) {
+      i_pid = P_PID_LIMIT;
     }
-    if (p_pid < -P_PID_LIMIT) {
-      p_pid = -P_PID_LIMIT;
+    if (i_pid < -P_PID_LIMIT) {
+      i_pid = -P_PID_LIMIT;
     }
-    cmd_pos = p_pid + i_pid;
-//    float flag = err_pos * prev_err_pos;
-//    if (flag < 0 && abs(err_pos - prev_err_pos) > 10) {
-//      if (err_pos > 0) {
-//        cmd_pos += DB;
-//      }
-//      else {
-//        cmd_pos -= DB;
-//      }
-//    }
-    data1[i] = filter_pos[0]; //cmd_pos;
+    cmd_pos = p_pid + i_pid + d_pid;
+
+    if (abs(err_pos) < 0.1) {
+      cmd_pos += 0.01;
+    }
+    else {
+      if (cmd_pos > 0) {
+        cmd_pos += 0.1;
+      }
+      else {
+        cmd_pos -= 0.1;
+      }
+    }
+
+    data0[i] = p_pid;
+    data1[i] = i_pid; 
 
     stepper_left.moveTo((long)cmd_pos);
     stepper_left.runToPosition();
