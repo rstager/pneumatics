@@ -39,11 +39,11 @@ void setup() {
 }
 
 void loop() {
-  int current_pos = 0;
+  float current_pos = 0;
   int i = 0;
   float desired_pos = 10;
   float err_pos = 0;
-  float prev_pos = 0;
+  float prev_pos[2] = {0};
   long cmd_pos = 0;
   float p_gain = 0.05*LOOP_DELAY;
   float i_gain = 0.0001*LOOP_DELAY;
@@ -51,23 +51,30 @@ void loop() {
   float p_pid = 0;
   float data0[ARRAY_SIZE];
   float data1[ARRAY_SIZE];
-  float filtered_pos = 0;
+  float filter_pos[3] = {0};
+  float b[3] = {0.02008337, 0.04016673, 0.02008337}; //{0.64135154, 1.28270308, 0.64135154};
+  float a[3] = {1, -1.56101808,  0.64135154};
+
   stepper_left.moveTo(0);
   stepper_left.runToPosition();
   delay(5000);
 
   float inc = 0.2;
   bool pos_reached = false;
-  float alpha = 0.9;
+  float alpha = 0.7;
   int j = 0;
   bool first_flag = false;
 
   while (true) {
-    current_pos = analogRead(PISTON_POS) - zero_pos;     // read the input pin
-    //filtered_pos = current_pos * alpha + (1 - alpha) * prev_pos;
-    //prev_pos = current_pos;
+    current_pos = (float)(analogRead(PISTON_POS) - zero_pos);     // read the input pin
+    filter_pos[0] = -a[1]*filter_pos[1] -a[2]*filter_pos[2]; 
+    filter_pos[0] += b[0]*current_pos + b[1]*prev_pos[0] + b[2]*prev_pos[1]; //current_pos * alpha + (1 - alpha) * prev_pos;
+    prev_pos[1] = prev_pos[0];
+    prev_pos[0] = current_pos;
+    filter_pos[2] = filter_pos[1];
+    filter_pos[1] = filter_pos[0];
     //Serial.println(current_pos);             // debug value
-    err_pos = -(desired_pos - (float)current_pos) ;
+    err_pos = -(desired_pos - (float)filter_pos[0]) ;
     data0[i] = (float)current_pos;
 //    if (desired_pos == 50 && abs(err_pos) < 5) {
 //      pos_reached = true;
@@ -85,12 +92,12 @@ void loop() {
         desired_pos += inc;      
       }
       
-      if (desired_pos > 600) {
+      if (desired_pos > 450) {
         inc = -0.2;
         pos_reached = true;
         first_flag = true;
       }
-      if (desired_pos < 200 & first_flag) {
+      if (desired_pos < 300 & first_flag) {
         inc = 0.2;
         pos_reached = true;
       }            
@@ -122,15 +129,15 @@ void loop() {
 //        cmd_pos -= DB;
 //      }
 //    }
-    data1[i] = cmd_pos;
+    data1[i] = filter_pos[0]; //cmd_pos;
 
     stepper_left.moveTo((long)cmd_pos);
     stepper_left.runToPosition();
     delay(LOOP_DELAY);
 
     Serial.print(data0[i]);
-    //Serial.print(", ");
-    //Serial.print(-data1[i]*10);
+    Serial.print(", ");
+    Serial.print(data1[i]);
     Serial.print("\n");
           
 //    if (i++ == ARRAY_SIZE) {
