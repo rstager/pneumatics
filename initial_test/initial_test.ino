@@ -15,8 +15,8 @@
 #define P_PID_LIMIT      (200)
 #define DB               (2)
 #define ARRAY_SIZE       (1)
-#define LOOP_DELAY       (1)
-#define ERR_MAX          800
+#define LOOP_DELAY       (0.5)
+#define ERR_MAX          2000
 
 AccelStepper stepper_left(AccelStepper::DRIVER, MOTOR_L_PIN_PUL, MOTOR_L_PIN_DIR);
 Timer monitor_timer;
@@ -47,9 +47,9 @@ void loop() {
   float prev_err_pos = 0;
   float prev_pos[2] = {0};
   long cmd_pos = 0;
-  float p_gain = 0.09*LOOP_DELAY;
-  float i_gain = 0.0004*LOOP_DELAY;
-  float d_gain = 0.2*LOOP_DELAY;
+  float p_gain = 0.04*LOOP_DELAY;
+  float i_gain = p_gain / 800; //0.00005*LOOP_DELAY;; //0.0001*LOOP_DELAY;
+  float d_gain = 0.05*LOOP_DELAY;
   float i_pid = 0;
   float p_pid = 0;
   float d_pid = 0;
@@ -81,28 +81,36 @@ void loop() {
     //Serial.println(current_pos);             // debug value
     prev_err_pos = err_pos;
     err_pos = -(desired_pos - (float)filter_pos[0]) ;
-//    ke_gain = 1 + (exp(err_pos/ERR_MAX) + exp(-err_pos/ERR_MAX))/2;
-//    if (ke_gain > 3) {
-//      ke_gain = 3;
-//    }
+    ke_gain = 1 + (exp(err_pos/ERR_MAX) + exp(-err_pos/ERR_MAX))/2;
+    if (ke_gain > 3) {
+      ke_gain = 3;
+    }
     err_pos *= ke_gain;
 
-//    if (desired_pos == 50 && abs(err_pos) < 5) {
-//      pos_reached = true;
-//    }
+    if (j++ == 5000)
+    {
+      if (desired_pos == 10) {
+        desired_pos = 250;
+      }
+      else if (desired_pos == 250) {
+        desired_pos = 400;
+      }
+      else if (desired_pos == 400) {
+        desired_pos = 250;
+      }
+      j = 0;
+    }
       
-      if (pos_reached) {
+      /*if (pos_reached) {
         if (j++ == 2000)
         {
           pos_reached = false;
           j = 0;
         }
       }
-
       if (pos_reached == false) {
         desired_pos += inc;      
       }
-      
       if (desired_pos > 450) {
         inc = -0.2;
         pos_reached = true;
@@ -111,7 +119,7 @@ void loop() {
       if (desired_pos < 300 & first_flag) {
         inc = 0.2;
         pos_reached = true;
-      }            
+      }*/            
 
     
 //    cmd_pos = 0;
@@ -132,21 +140,21 @@ void loop() {
       i_pid = -P_PID_LIMIT;
     }
     cmd_pos = p_pid + i_pid + d_pid;
+//
+//    if (abs(err_pos) < 5) {
+//      cmd_pos = 0.01;
+//    }
+//    else {
+//      if (cmd_pos > 0) {
+//        cmd_pos += 0.1;
+//      }
+//      else {
+//        cmd_pos -= 0.1;
+//      }
+//    }
 
-    if (abs(err_pos) < 0.1) {
-      cmd_pos += 0.01;
-    }
-    else {
-      if (cmd_pos > 0) {
-        cmd_pos += 0.1;
-      }
-      else {
-        cmd_pos -= 0.1;
-      }
-    }
-
-    data0[i] = p_pid;
-    data1[i] = i_pid; 
+    data0[i] = err_pos;
+    data1[i] = cmd_pos; 
 
     stepper_left.moveTo((long)cmd_pos);
     stepper_left.runToPosition();
