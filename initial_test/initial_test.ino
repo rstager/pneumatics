@@ -47,9 +47,9 @@ void loop() {
   float prev_err_pos = 0;
   float prev_pos[2] = {0};
   long cmd_pos = 0;
-  float p_gain = 0.04*LOOP_DELAY;
-  float i_gain = p_gain / 800; //0.00005*LOOP_DELAY;; //0.0001*LOOP_DELAY;
-  float d_gain = 0.05*LOOP_DELAY;
+  float p_gain = 0.035*LOOP_DELAY*2;
+  float i_gain = p_gain / 700; //0.00005*LOOP_DELAY;; //0.0001*LOOP_DELAY;
+  float d_gain = 0.02*LOOP_DELAY*2;
   float i_pid = 0;
   float p_pid = 0;
   float d_pid = 0;
@@ -90,13 +90,13 @@ void loop() {
     if (j++ == 5000)
     {
       if (desired_pos == 10) {
-        desired_pos = 250;
+        desired_pos = 300;
       }
-      else if (desired_pos == 250) {
-        desired_pos = 400;
+      else if (desired_pos == 300) {
+        desired_pos = 450;
       }
-      else if (desired_pos == 400) {
-        desired_pos = 250;
+      else if (desired_pos == 450) {
+        desired_pos = 300;
       }
       j = 0;
     }
