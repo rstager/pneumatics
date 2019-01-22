@@ -16,7 +16,11 @@
 #define DB               (2)
 #define ARRAY_SIZE       (1)
 #define LOOP_DELAY       (0.5)
-#define ERR_MAX          2000
+#define ERR_MAX          100
+#define P_GAIN           (0.09)
+#define I_GAIN           (0.0004*LOOP_DELAY) //0.00005*LOOP_DELAY;; //0.0001*LOOP_DELAY;
+#define D_GAIN           (0.2)
+#define ALPHA            (0.004)
 
 AccelStepper stepper_left(AccelStepper::DRIVER, MOTOR_L_PIN_PUL, MOTOR_L_PIN_DIR);
 Timer monitor_timer;
@@ -47,17 +51,14 @@ void loop() {
   float prev_err_pos = 0;
   float prev_pos[2] = {0};
   long cmd_pos = 0;
-  float p_gain = 0.035*LOOP_DELAY*2;
-  float i_gain = p_gain / 700; //0.00005*LOOP_DELAY;; //0.0001*LOOP_DELAY;
-  float d_gain = 0.02*LOOP_DELAY*2;
   float i_pid = 0;
   float p_pid = 0;
   float d_pid = 0;
   float data0[ARRAY_SIZE];
   float data1[ARRAY_SIZE];
   float filter_pos[3] = {0};
-  float b[3] = {0.02008337, 0.04016673, 0.02008337}; //{0.64135154, 1.28270308, 0.64135154};
-  float a[3] = {1, -1.56101808,  0.64135154};
+  float b[3] = {0.09763107, 0.19526215, 0.09763107}; //{0.64135154, 1.28270308, 0.64135154};
+  float a[3] = {1,  -0.94280904,  0.33333333};
 
   stepper_left.moveTo(0);
   stepper_left.runToPosition();
@@ -69,6 +70,7 @@ void loop() {
   int j = 0;
   bool first_flag = false;
   float ke_gain = 1;
+  float err_clamp = 0;
 
   while (true) {
     current_pos = (float)(analogRead(PISTON_POS) - zero_pos);     // read the input pin
@@ -80,8 +82,19 @@ void loop() {
     filter_pos[1] = filter_pos[0];
     //Serial.println(current_pos);             // debug value
     prev_err_pos = err_pos;
-    err_pos = -(desired_pos - (float)filter_pos[0]) ;
-    ke_gain = 1 + (exp(err_pos/ERR_MAX) + exp(-err_pos/ERR_MAX))/2;
+    err_pos = -(desired_pos - (float)filter_pos[0]);
+    if (abs(err_pos) > ERR_MAX) {
+      if (err_pos > 0) {
+        err_clamp = ERR_MAX;
+      }
+      else {
+        err_clamp = -ERR_MAX;
+      }
+    }
+    else {
+      err_clamp = err_pos;
+    }
+    ke_gain = (exp(ALPHA * err_clamp) + exp(-ALPHA * err_clamp))/2;
     if (ke_gain > 3) {
       ke_gain = 3;
     }
@@ -130,9 +143,9 @@ void loop() {
 //    stepper_left.runToPosition();
     
 
-    i_pid += i_gain * err_pos;
-    p_pid = p_gain * err_pos;
-    d_pid = d_gain * (err_pos - prev_err_pos);
+    i_pid += I_GAIN * err_pos;
+    p_pid = P_GAIN * err_pos;
+    d_pid = D_GAIN * (err_pos - prev_err_pos);
     if (i_pid > P_PID_LIMIT) {
       i_pid = P_PID_LIMIT;
     }
@@ -140,21 +153,21 @@ void loop() {
       i_pid = -P_PID_LIMIT;
     }
     cmd_pos = p_pid + i_pid + d_pid;
-//
-//    if (abs(err_pos) < 5) {
-//      cmd_pos = 0.01;
-//    }
-//    else {
-//      if (cmd_pos > 0) {
-//        cmd_pos += 0.1;
-//      }
-//      else {
-//        cmd_pos -= 0.1;
-//      }
-//    }
+
+    if (abs(err_pos) < 50) {
+      cmd_pos += 0.01;
+    }
+    else {
+      if (cmd_pos > 0) {
+        cmd_pos += 1;
+      }
+      else {
+        cmd_pos -= 1;
+      }
+    }
 
     data0[i] = err_pos;
-    data1[i] = cmd_pos; 
+    data1[i] = ke_gain*100; // 
 
     stepper_left.moveTo((long)cmd_pos);
     stepper_left.runToPosition();
