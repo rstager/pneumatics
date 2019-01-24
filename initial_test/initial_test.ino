@@ -12,7 +12,7 @@
 #define THROTTLE_SPEED   (80000)
 #define THROTTLE_ACC     (8000000)
 #define PISTON_POS       A0
-#define P_PID_LIMIT      (200)
+#define P_PID_LIMIT      (300)
 #define DB               (2)
 #define ARRAY_SIZE       (1)
 #define LOOP_DELAY       (0.5)
@@ -71,6 +71,7 @@ void loop() {
   bool first_flag = false;
   float ke_gain = 1;
   float err_clamp = 0;
+  float dither = 0.25;
 
   while (true) {
     current_pos = (float)(analogRead(PISTON_POS) - zero_pos);     // read the input pin
@@ -166,8 +167,11 @@ void loop() {
       }
     }
 
+    cmd_pos += dither;
+    dither = -dither;
+    
     data0[i] = err_pos;
-    data1[i] = ke_gain*100; // 
+    data1[i] = i_pid; // 
 
     stepper_left.moveTo((long)cmd_pos);
     stepper_left.runToPosition();
