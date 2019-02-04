@@ -17,7 +17,7 @@
 #define ALPHA            (0.004)
 #define VALVE_ON         (160)
 #define VALVE_OFF        (100)
-#define P_GAIN_CURRENT0  (0.2)
+#define P_GAIN_CURRENT0  (0.5)
 #define I_GAIN_CURRENT0  (0.001)
 
 int zero_pos = 0;
@@ -29,7 +29,12 @@ float err_current = 0;
 float desired_current = 200;
 float cmd_current = 0;
 float current = 0;
-
+float filter_pos[3] = {0};
+float prev_pos[2] = {0};
+float b[3] = {0.09763107, 0.19526215, 0.09763107}; //{0.64135154, 1.28270308, 0.64135154};
+float a[3] = {1,  -0.94280904,  0.33333333};
+float current_array[10] = {0};
+  
 void setup() {
   sensor219.begin();
   Serial.begin(2000000);
@@ -41,14 +46,14 @@ void setup() {
   digitalWrite(DRIVE3_PIN, LOW);
   int prescalerVal = 0x07;
   TCCR0B &= ~prescalerVal;
-  prescalerVal = 1;
+  prescalerVal = 3;
   TCCR0B |= prescalerVal;
   analogWrite(DRIVE2_PIN, VALVE_ON);
   delay(5000);
   zero_pos = analogRead(PISTON_POS); 
   analogWrite(DRIVE2_PIN, VALVE_OFF);
-  control_timer.every(20, control_valve, -1);
-  control_timer.every(100000, change_target, -1);
+  control_timer.every(1, control_valve, -1);
+  control_timer.every(1000, change_target, -1);
 }
 
 void change_target() {
@@ -61,8 +66,23 @@ void change_target() {
 }
 
 void control_valve() {
-  current = sensor219.getCurrent_mA();
-  err_current = desired_current - current;
+  float adc_current = sensor219.getCurrent_mA();
+  double current_sum = 0;
+  for (int i = 0; i < 10 - 1; i++) {
+    current_array[i] = current_array[i+1];
+    current_sum += current_array[i];
+  }
+  current_array[9] = adc_current;
+  current_sum += adc_current;
+  current = current_sum/10;
+  filter_pos[0] = -a[1]*filter_pos[1] -a[2]*filter_pos[2]; 
+  filter_pos[0] += b[0]*current + b[1]*prev_pos[0] + b[2]*prev_pos[1]; //current_pos * alpha + (1 - alpha) * prev_pos;
+  prev_pos[1] = prev_pos[0];
+  prev_pos[0] = current;
+  filter_pos[2] = filter_pos[1];
+  filter_pos[1] = filter_pos[0];
+
+  err_current = desired_current - filter_pos[0]; //current;
   i_pid_current += I_GAIN_CURRENT0 * err_current;
   p_pid_current = P_GAIN_CURRENT0 * err_current;
   cmd_current = i_pid_current + p_pid_current;
@@ -71,9 +91,9 @@ void control_valve() {
   }
   analogWrite(DRIVE0_PIN, (int)cmd_current);
 
-  Serial.print(current);
-  Serial.print(", ");
   Serial.print(desired_current);
+  Serial.print(", ");
+  Serial.print(filter_pos[0]);
   Serial.print(", ");
   Serial.print(cmd_current);  
   Serial.print("\n");
