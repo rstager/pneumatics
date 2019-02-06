@@ -12,12 +12,12 @@
 #define LOOP_DELAY       (0.1)
 #define VALVE_ON         (160)
 #define VALVE_OFF        (100)
-#define P_PID_LIMIT      (2000)
-#define P_GAIN           (30)
-#define I_GAIN           0.1 //(0.0004*LOOP_DELAY) //0.00005*LOOP_DELAY;; //0.0001*LOOP_DELAY;
+#define P_PID_LIMIT      (3000)
+#define P_GAIN           (50)
+#define I_GAIN           0.2 //(0.0004*LOOP_DELAY) //0.00005*LOOP_DELAY;; //0.0001*LOOP_DELAY;
 #define D_GAIN           0//(0.2)
   
-int desired_pos = 50;
+int desired_pos = 125;
 float current_pos = 0;
 float err_pos = 0;
 float prev_err_pos = 0;
@@ -50,11 +50,11 @@ void setup() {
 }
 
 void change_target() {
-  if (desired_pos == 50) {
+  if (desired_pos == 125) {
     desired_pos = 150;
   }
   else {
-    desired_pos = 50;
+    desired_pos = 125;
   }
 }
 
@@ -68,12 +68,12 @@ void control_valve() {
   if (i_pid > P_PID_LIMIT) {
     i_pid = P_PID_LIMIT;
   }
-  if (i_pid < -P_PID_LIMIT) {
+  if (i_pid < 0) {
     i_pid = 0;
   }
-  cmd_pos = p_pid + i_pid + d_pid + DB;
-  if (cmd_pos < 0) {
-    cmd_pos = 0;
+  cmd_pos = p_pid + i_pid + d_pid;
+  if (cmd_pos < DB) {
+    cmd_pos = DB;
   }
   else if (cmd_pos > 4095) {
     cmd_pos = 4095;
@@ -84,9 +84,9 @@ void control_valve() {
 //  }
 //  dac.setVoltage(counter, false);
 //  Serial.println(current_pos);
-  Serial.print(p_pid);
+  Serial.print(err_pos);
   Serial.print(',');
-  Serial.println(d_pid);
+  Serial.println(desired_pos);
 }
 
 void loop() {
